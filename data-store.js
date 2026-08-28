@@ -120,7 +120,7 @@
       id: routine.id || id(), type: "routine", title: String(routine.title || "").trim(),
       description: String(routine.description || ""), idealOrder: Number.isInteger(routine.idealOrder) ? routine.idealOrder : index + 1,
       active: routine.active !== false, dailyDate: routine.dailyDate || null,
-      dailyState: ["selected", "skipped"].includes(routine.dailyState) ? routine.dailyState : "undecided",
+      dailyState: ["selected", "completed", "skipped"].includes(routine.dailyState) ? routine.dailyState : "undecided",
       dailyOrder: Number.isInteger(routine.dailyOrder) && routine.dailyOrder > 0 ? routine.dailyOrder : null,
       createdAt, updatedAt: routine.updatedAt || createdAt, deletedAt: routine.deletedAt || null
     };
