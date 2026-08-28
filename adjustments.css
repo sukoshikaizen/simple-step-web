@@ -1,0 +1,6 @@
+input,select,textarea{min-width:0;max-width:100%}
+.composer label{min-width:0}
+#journalDate{min-width:0;max-width:100%}
+.task-card-dialog .dialog-heading{gap:10px}
+.task-card-dialog .dialog-heading>div{margin-right:auto}
+@media(max-width:420px){.task-card-dialog #saveTaskEditor{padding:10px 13px}}
