@@ -2,7 +2,7 @@
   "use strict";
 
   const STORAGE_KEY = "simple-step-v2-db";
-  const SCHEMA_VERSION = 4;
+  const SCHEMA_VERSION = 5;
   const PRIORITIES = ["none", "low", "medium", "high", "urgent"];
 
   const now = () => new Date().toISOString();
@@ -42,6 +42,7 @@
       tasks: [],
       journals: [],
       recurringRules: [],
+      routines: [],
       aiChanges: [],
       importHistory: [],
       settings: { timeZone: "Asia/Tokyo", weekStartsOn: 1, dayRolloverTime: "00:00" }
@@ -113,17 +114,30 @@
     };
   }
 
+  function normalizeRoutine(routine, index = 0) {
+    const createdAt = routine.createdAt || now();
+    return {
+      id: routine.id || id(), type: "routine", title: String(routine.title || "").trim(),
+      description: String(routine.description || ""), idealOrder: Number.isInteger(routine.idealOrder) ? routine.idealOrder : index + 1,
+      active: routine.active !== false, dailyDate: routine.dailyDate || null,
+      dailyState: ["selected", "skipped"].includes(routine.dailyState) ? routine.dailyState : "undecided",
+      dailyOrder: Number.isInteger(routine.dailyOrder) && routine.dailyOrder > 0 ? routine.dailyOrder : null,
+      createdAt, updatedAt: routine.updatedAt || createdAt, deletedAt: routine.deletedAt || null
+    };
+  }
+
   function migrate(raw) {
     const source = raw && typeof raw === "object" ? raw : {};
     const db = { ...createEmptyDatabase(), ...source, schemaVersion: SCHEMA_VERSION };
     for (const key of [
       "categories", "projects", "themes", "tasks", "journals",
-      "recurringRules", "aiChanges", "importHistory"
+      "recurringRules", "routines", "aiChanges", "importHistory"
     ]) {
       db[key] = Array.isArray(db[key]) ? db[key] : [];
     }
     db.tasks = db.tasks.map(normalizeTask);
     db.recurringRules = db.recurringRules.map(normalizeRecurringRule);
+    db.routines = db.routines.map(normalizeRoutine);
     db.aiChanges = db.aiChanges.map(change => ({
       ...change,
       fromValue: change.fromValue ?? change.fromId ?? null,
@@ -224,6 +238,7 @@
     createTask,
     updateTask,
     normalizeRecurringRule,
+    normalizeRoutine,
     migrate,
     generateDueTasks,
     dateKey,
