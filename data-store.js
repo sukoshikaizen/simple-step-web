@@ -117,7 +117,8 @@
   function normalizeRoutine(routine, index = 0) {
     const createdAt = routine.createdAt || now();
     return {
-      id: routine.id || id(), type: "routine", title: String(routine.title || "").trim(),
+      id: routine.id || id(), type: "routine", itemType: routine.itemType === "category" ? "category" : "routine",
+      categoryId: routine.categoryId || "", title: String(routine.title || "").trim(),
       description: String(routine.description || ""), idealOrder: Number.isInteger(routine.idealOrder) ? routine.idealOrder : index + 1,
       active: routine.active !== false, dailyDate: routine.dailyDate || null,
       dailyState: ["selected", "completed", "skipped"].includes(routine.dailyState) ? routine.dailyState : "undecided",
@@ -136,6 +137,12 @@
       db[key] = Array.isArray(db[key]) ? db[key] : [];
     }
     db.tasks = db.tasks.map(normalizeTask);
+    db.projects = db.projects.map(project => ({ ...project, categoryId: project.categoryId || "" }));
+    for (const project of db.projects) {
+      if (project.categoryId) continue;
+      const categoryIds = [...new Set(db.tasks.filter(task => task.projectId === project.id && task.categoryId).map(task => task.categoryId))];
+      if (categoryIds.length === 1) project.categoryId = categoryIds[0];
+    }
     db.recurringRules = db.recurringRules.map(normalizeRecurringRule);
     db.routines = db.routines.map(normalizeRoutine);
     db.aiChanges = db.aiChanges.map(change => ({
