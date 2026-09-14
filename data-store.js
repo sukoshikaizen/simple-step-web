@@ -2,7 +2,7 @@
   "use strict";
 
   const STORAGE_KEY = "simple-step-v2-db";
-  const SCHEMA_VERSION = 6;
+  const SCHEMA_VERSION = 7;
   const PRIORITIES = ["none", "low", "medium", "high", "urgent"];
 
   const now = () => new Date().toISOString();
@@ -41,6 +41,7 @@
       themes: [],
       tasks: [],
       journals: [],
+      journalCategories: [],
       recurringRules: [],
       routines: [],
       patrolPlaces: [],
@@ -133,12 +134,14 @@
     const source = raw && typeof raw === "object" ? raw : {};
     const db = { ...createEmptyDatabase(), ...source, schemaVersion: SCHEMA_VERSION };
     for (const key of [
-      "categories", "projects", "themes", "tasks", "journals",
+      "categories", "projects", "themes", "tasks", "journals", "journalCategories",
       "recurringRules", "routines", "patrolPlaces", "patrolChecks", "aiChanges", "importHistory"
     ]) {
       db[key] = Array.isArray(db[key]) ? db[key] : [];
     }
     db.tasks = db.tasks.map(normalizeTask);
+    db.journals = db.journals.map(journal => ({ ...journal, journalKind: journal.journalKind === "one_line" ? "one_line" : "standard", journalCategoryId: journal.journalCategoryId || "" }));
+    db.journalCategories = db.journalCategories.map(category => { const createdAt = category.createdAt || now(); return { id: category.id || id(), type: "journal_category", name: String(category.name || "").trim(), active: category.active !== false, createdAt, updatedAt: category.updatedAt || createdAt, deletedAt: category.deletedAt || null }; }).filter(category => category.name);
     db.projects = db.projects.map(project => ({ ...project, categoryId: project.categoryId || "" }));
     for (const project of db.projects) {
       if (project.categoryId) continue;
