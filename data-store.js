@@ -2,7 +2,7 @@
   "use strict";
 
   const STORAGE_KEY = "simple-step-v2-db";
-  const SCHEMA_VERSION = 7;
+  const SCHEMA_VERSION = 8;
   const PRIORITIES = ["none", "low", "medium", "high", "urgent"];
 
   const now = () => new Date().toISOString();
@@ -151,7 +151,7 @@
     db.recurringRules = db.recurringRules.map(normalizeRecurringRule);
     db.routines = db.routines.map(normalizeRoutine);
     db.patrolPlaces = db.patrolPlaces.map((place, index) => { const createdAt = place.createdAt || now(); return { id: place.id || id(), type: "patrol_place", name: String(place.name || "").trim(), order: Number.isInteger(place.order) ? place.order : index + 1, active: place.active !== false, createdAt, updatedAt: place.updatedAt || createdAt, deletedAt: place.deletedAt || null }; }).filter(place => place.name);
-    db.patrolChecks = db.patrolChecks.map(check => { const createdAt = check.createdAt || check.checkedAt || now(); return { id: check.id || id(), type: "patrol_check", patrolPlaceId: check.patrolPlaceId || "", businessDate: check.businessDate || dateKey(createdAt), checked: check.checked !== false, checkedAt: check.checked === false ? null : (check.checkedAt || createdAt), uncheckedAt: check.uncheckedAt || null, createdAt, updatedAt: check.updatedAt || createdAt }; }).filter(check => check.patrolPlaceId);
+    db.patrolChecks = db.patrolChecks.map(check => { const createdAt = check.createdAt || check.checkedAt || now(); return { id: check.id || id(), type: "patrol_check", patrolPlaceId: check.patrolPlaceId || "", businessDate: check.businessDate || dateKey(createdAt), checked: check.checked !== false, checkedAt: check.checked === false ? null : (check.checkedAt || createdAt), uncheckedAt: check.uncheckedAt || null, backfilled: Boolean(check.backfilled), createdAt, updatedAt: check.updatedAt || createdAt }; }).filter(check => check.patrolPlaceId);
     db.aiChanges = db.aiChanges.map(change => ({
       ...change,
       fromValue: change.fromValue ?? change.fromId ?? null,
