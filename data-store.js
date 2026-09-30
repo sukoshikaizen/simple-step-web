@@ -2,7 +2,7 @@
   "use strict";
 
   const STORAGE_KEY = "simple-step-v2-db";
-  const SCHEMA_VERSION = 10;
+  const SCHEMA_VERSION = 11;
   const PRIORITIES = ["none", "low", "medium", "high", "urgent"];
 
   const now = () => new Date().toISOString();
@@ -40,6 +40,7 @@
       projects: [],
       themes: [],
       tasks: [],
+      wishLists: [],
       journals: [],
       journalCategories: [],
       recurringRules: [],
@@ -49,7 +50,7 @@
       patrolChecks: [],
       aiChanges: [],
       importHistory: [],
-      settings: { timeZone: "Asia/Tokyo", weekStartsOn: 1, dayRolloverTime: "00:00", backlogView: "newest" }
+      settings: { timeZone: "Asia/Tokyo", weekStartsOn: 1, dayRolloverTime: "00:00", backlogView: "newest", wishView: "newest" }
     };
   }
 
@@ -58,6 +59,8 @@
     return {
       id: task.id || id(),
       type: "task",
+      recordKind: task.recordKind === "wish" ? "wish" : "task",
+      wishListId: task.wishListId || "",
       title: String(task.title || "").trim(),
       description: String(task.description || ""),
       categoryId: task.categoryId || "",
@@ -135,12 +138,13 @@
     const source = raw && typeof raw === "object" ? raw : {};
     const db = { ...createEmptyDatabase(), ...source, schemaVersion: SCHEMA_VERSION };
     for (const key of [
-      "categories", "projects", "themes", "tasks", "journals", "journalCategories",
+      "categories", "projects", "themes", "tasks", "wishLists", "journals", "journalCategories",
       "recurringRules", "routines", "routineChecks", "patrolPlaces", "patrolChecks", "aiChanges", "importHistory"
     ]) {
       db[key] = Array.isArray(db[key]) ? db[key] : [];
     }
     db.tasks = db.tasks.map(normalizeTask);
+    db.wishLists = db.wishLists.map((list, index) => { const createdAt = list.createdAt || now(); return { id: list.id || id(), type: "wish_list", name: String(list.name || "").trim(), displayOrder: Number.isInteger(list.displayOrder) ? list.displayOrder : index + 1, createdAt, updatedAt: list.updatedAt || createdAt, deletedAt: list.deletedAt || null }; }).filter(list => list.name);
     db.journals = db.journals.map(journal => ({ ...journal, journalKind: journal.journalKind === "one_line" ? "one_line" : "standard", journalCategoryId: journal.journalCategoryId || "" }));
     db.journalCategories = db.journalCategories.map(category => { const createdAt = category.createdAt || now(); return { id: category.id || id(), type: "journal_category", name: String(category.name || "").trim(), active: category.active !== false, createdAt, updatedAt: category.updatedAt || createdAt, deletedAt: category.deletedAt || null }; }).filter(category => category.name);
     db.categories = db.categories.map((category, index) => ({ ...category, displayOrder: Number.isInteger(category.displayOrder) ? category.displayOrder : index + 1 }));
@@ -161,10 +165,11 @@
       toValue: change.toValue ?? change.toId ?? null
     }));
     db.themes = db.themes.map(theme => ({ ...theme, active: theme.active !== false }));
-    db.settings = { timeZone: "Asia/Tokyo", weekStartsOn: 1, dayRolloverTime: "00:00", backlogView: "newest", ...(db.settings || {}) };
+    db.settings = { timeZone: "Asia/Tokyo", weekStartsOn: 1, dayRolloverTime: "00:00", backlogView: "newest", wishView: "newest", ...(db.settings || {}) };
     db.settings.weekStartsOn = Math.min(6, Math.max(0, Number(db.settings.weekStartsOn) || 0));
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(db.settings.dayRolloverTime)) db.settings.dayRolloverTime = "00:00";
     if (!["newest", "hierarchy"].includes(db.settings.backlogView)) db.settings.backlogView = "newest";
+    if (!["newest", "hierarchy"].includes(db.settings.wishView)) db.settings.wishView = "newest";
     return db;
   }
 
