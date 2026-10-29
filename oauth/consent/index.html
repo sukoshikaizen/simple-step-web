@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SimpleStep AI連携</title>
+  <link rel="stylesheet" href="../../style.css">
+  <link rel="stylesheet" href="../../adjustments.css">
+</head>
+<body>
+  <main class="oauth-consent-main">
+    <section class="cloud-auth-card oauth-consent-card">
+      <p class="eyebrow">SimpleStep</p>
+      <h1>AI連携の確認</h1>
+      <p id="consentMessage">連携内容を確認しています…</p>
+      <div id="consentDetails" hidden>
+        <p><strong id="consentClientName"></strong> がSimpleStepへの接続を求めています。</p>
+        <ul>
+          <li>タスク、カテゴリ、プロジェクトの参照</li>
+          <li>未承認タスクの追加</li>
+          <li>未承認の変更提案</li>
+        </ul>
+        <p class="meta">既存タスクの直接変更・削除は許可されません。</p>
+        <div class="button-row">
+          <button id="denyConsent" class="secondary-button danger" type="button">許可しない</button>
+          <button id="approveConsent" class="primary-button" type="button">連携を許可</button>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.84.0/dist/umd/supabase.min.js"></script>
+  <script src="../../supabase-config.js"></script>
+  <script src="consent.js"></script>
+</body>
+</html>

@@ -67,6 +67,10 @@
     document.getElementById("cloudAuthView")?.remove();
     document.documentElement.classList.add("cloud-authenticated");
     resolveReady(user);
+    const returnTo = new URLSearchParams(location.search).get("returnTo");
+    if (returnTo && returnTo.startsWith("/simple-step-web/oauth/consent/")) {
+      location.replace(returnTo);
+    }
   }
 
   client.auth.onAuthStateChange((_event, session) => {
