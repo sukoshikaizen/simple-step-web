@@ -315,21 +315,26 @@
   const repository = {
     async load() {
       const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw && !localStorage.getItem(`${STORAGE_KEY}-pre-cloud-backup`)) {
+        localStorage.setItem(`${STORAGE_KEY}-pre-cloud-backup`, raw);
+      }
       const localDb = migrate(raw ? JSON.parse(raw) : null);
       const cloudRows = await fetchCloudRows();
       if (cloudRows === null) return localDb;
-      if (cloudRows.length) {
+      const cloudContentCount = cloudRows.filter(row => row.record_type !== "settings").length;
+      const localCount = Object.keys(COLLECTION_TYPES).reduce((count, key) => count + localDb[key].length, 0);
+      if (cloudContentCount) {
         remember(cloudRows);
         localStorage.setItem(`${STORAGE_KEY}-cloud-cache`, JSON.stringify(rowsDatabase(cloudRows)));
         return rowsDatabase(cloudRows);
       }
-      const localCount = Object.keys(COLLECTION_TYPES).reduce((count, key) => count + localDb[key].length, 0);
       if (localCount && confirm(`この端末にSimpleStepの記録が ${localCount}件あります。\nSupabaseへ移行して、PCとスマートフォンで共有しますか？`)) {
+        remember(cloudRows);
         await saveCloud(localDb);
         localStorage.setItem(`${STORAGE_KEY}-migration-backup`, JSON.stringify(localDb));
         return localDb;
       }
-      remember([]);
+      remember(cloudRows);
       return createEmptyDatabase();
     },
     async save(db) {
