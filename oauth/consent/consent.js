@@ -42,13 +42,21 @@
     details.querySelectorAll("button").forEach(button => { button.disabled = true; });
     message.textContent = action === "approve" ? "連携を許可しています…" : "連携を拒否しています…";
     const method = action === "approve" ? "approveAuthorization" : "denyAuthorization";
-    const { data, error } = await client.auth.oauth[method](authorizationId);
-    if (error) {
-      message.textContent = `処理できませんでした：${error.message}`;
+    try {
+      const request = client.auth.oauth[method](authorizationId, { skipBrowserRedirect: true });
+      const timeout = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("承認サーバーから時間内に応答がありませんでした。")), 20000);
+      });
+      const { data, error } = await Promise.race([request, timeout]);
+      if (error) throw error;
+      if (!data?.redirect_url) throw new Error("接続元へ戻るURLを取得できませんでした。");
+      message.textContent = "承認しました。接続元へ戻ります…";
+      location.replace(data.redirect_url);
+    } catch (error) {
+      console.error(error);
+      message.textContent = `処理できませんでした：${error?.message || "不明なエラー"}`;
       details.querySelectorAll("button").forEach(button => { button.disabled = false; });
-      return;
     }
-    location.href = data.redirect_url;
   };
 
   document.getElementById("approveConsent").onclick = () => finish("approve");
