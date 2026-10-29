@@ -4,6 +4,13 @@
   const STORAGE_KEY = "simple-step-v2-db";
   const SCHEMA_VERSION = 11;
   const PRIORITIES = ["none", "low", "medium", "high", "urgent"];
+  const COLLECTION_TYPES = Object.freeze({
+    categories: "category", projects: "project", themes: "theme", tasks: "task",
+    wishLists: "wish_list", journals: "journal", journalCategories: "journal_category",
+    recurringRules: "recurring_rule", routines: "routine", routineChecks: "routine_check",
+    patrolPlaces: "patrol_place", patrolChecks: "patrol_check", aiChanges: "ai_change",
+    importHistory: "import_history"
+  });
 
   const now = () => new Date().toISOString();
   const id = () => crypto.randomUUID();
@@ -242,13 +249,101 @@
     return generated;
   }
 
+  let syncedSnapshot = new Map();
+
+  const recordKey = record => `${record.record_type}:${record.record_id}`;
+  const itemId = (item, type) => String(item.id || (type === "import_history" ? item.requestId : "") || id());
+  function databaseRows(db, userId) {
+    const rows = [];
+    for (const [collection, recordType] of Object.entries(COLLECTION_TYPES)) {
+      for (const item of db[collection]) {
+        if (!item.id && recordType !== "import_history") item.id = id();
+        rows.push({ user_id: userId, record_type: recordType, record_id: itemId(item, recordType), payload: item });
+      }
+    }
+    rows.push({ user_id: userId, record_type: "settings", record_id: "main", payload: db.settings });
+    return rows;
+  }
+
+  function rowsDatabase(rows) {
+    const db = createEmptyDatabase();
+    const typeCollections = Object.fromEntries(Object.entries(COLLECTION_TYPES).map(([key, value]) => [value, key]));
+    for (const row of rows || []) {
+      if (row.record_type === "settings") db.settings = row.payload || db.settings;
+      else if (typeCollections[row.record_type]) db[typeCollections[row.record_type]].push(row.payload);
+    }
+    return migrate(db);
+  }
+
+  function remember(rows) {
+    syncedSnapshot = new Map(rows.map(row => [recordKey(row), JSON.stringify(row.payload)]));
+  }
+
+  async function fetchCloudRows() {
+    const cloud = window.SimpleStepCloud;
+    const user = cloud?.getUser();
+    if (!cloud?.client || !user) return null;
+    const { data, error } = await cloud.client.from("simple_step_records")
+      .select("record_type,record_id,payload,updated_at");
+    if (error) throw error;
+    return data || [];
+  }
+
+  async function saveCloud(db) {
+    const cloud = window.SimpleStepCloud;
+    const user = cloud?.getUser();
+    if (!cloud?.client || !user) return;
+    const rows = databaseRows(db, user.id);
+    const nextKeys = new Set(rows.map(recordKey));
+    const changed = rows.filter(row => syncedSnapshot.get(recordKey(row)) !== JSON.stringify(row.payload));
+    const removed = [...syncedSnapshot.keys()].filter(key => !nextKeys.has(key));
+    if (changed.length) {
+      const { error } = await cloud.client.from("simple_step_records").upsert(changed, {
+        onConflict: "user_id,record_type,record_id"
+      });
+      if (error) throw error;
+    }
+    for (const key of removed) {
+      const split = key.indexOf(":");
+      const { error } = await cloud.client.from("simple_step_records").delete()
+        .eq("record_type", key.slice(0, split)).eq("record_id", key.slice(split + 1));
+      if (error) throw error;
+    }
+    remember(rows);
+  }
+
   const repository = {
     async load() {
       const raw = localStorage.getItem(STORAGE_KEY);
-      return migrate(raw ? JSON.parse(raw) : null);
+      const localDb = migrate(raw ? JSON.parse(raw) : null);
+      const cloudRows = await fetchCloudRows();
+      if (cloudRows === null) return localDb;
+      if (cloudRows.length) {
+        remember(cloudRows);
+        localStorage.setItem(`${STORAGE_KEY}-cloud-cache`, JSON.stringify(rowsDatabase(cloudRows)));
+        return rowsDatabase(cloudRows);
+      }
+      const localCount = Object.keys(COLLECTION_TYPES).reduce((count, key) => count + localDb[key].length, 0);
+      if (localCount && confirm(`この端末にSimpleStepの記録が ${localCount}件あります。\nSupabaseへ移行して、PCとスマートフォンで共有しますか？`)) {
+        await saveCloud(localDb);
+        localStorage.setItem(`${STORAGE_KEY}-migration-backup`, JSON.stringify(localDb));
+        return localDb;
+      }
+      remember([]);
+      return createEmptyDatabase();
     },
     async save(db) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+      await saveCloud(db);
+      localStorage.setItem(`${STORAGE_KEY}-cloud-cache`, JSON.stringify(db));
+    },
+    async refresh() {
+      const rows = await fetchCloudRows();
+      if (rows === null) return null;
+      remember(rows);
+      const value = rowsDatabase(rows);
+      localStorage.setItem(`${STORAGE_KEY}-cloud-cache`, JSON.stringify(value));
+      return value;
     }
   };
 
