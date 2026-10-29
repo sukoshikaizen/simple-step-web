@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>SimpleStep データ復旧確認</title>
+  <style>
+    body{margin:0;background:#f8f3e9;color:#26352e;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:680px;margin:auto;padding:28px 18px 60px}h1{font-size:1.65rem}.notice,.record{margin:14px 0;padding:16px;border:1px solid #d8d2c7;border-radius:16px;background:#fffdf8}.record strong{display:block;margin-bottom:5px}.record button{margin-top:10px;padding:10px 14px;border:0;border-radius:10px;background:#3f725b;color:white;font-weight:700}.empty{color:#745c50}.warning{color:#8b3a2e;font-weight:700}code{overflow-wrap:anywhere}
+  </style>
+</head>
+<body>
+<main>
+  <p>SimpleStep</p>
+  <h1>Safari内のデータ復旧確認</h1>
+  <div class="notice">
+    <p class="warning">このページはデータを変更しません。</p>
+    <p>Safariに残っているSimpleStepの保存データと、自動バックアップだけを確認します。</p>
+  </div>
+  <div id="results"></div>
+</main>
+<script>
+(() => {
+  const keys = [
+    ["simple-step-v2-db", "従来のブラウザ内データ"],
+    ["simple-step-v2-db-pre-cloud-backup", "クラウド移行前の自動バックアップ"],
+    ["simple-step-v2-db-migration-backup", "移行時の自動バックアップ"],
+    ["simple-step-v2-db-cloud-cache", "クラウド同期キャッシュ"],
+    ["simple-step-db", "旧形式データ"]
+  ];
+  const results = document.getElementById("results");
+  let found = 0;
+  for (const [key, label] of keys) {
+    const raw = localStorage.getItem(key);
+    if (!raw) continue;
+    found++;
+    const card = document.createElement("section");
+    card.className = "record";
+    let count = "内容を解析できません";
+    try {
+      const value = JSON.parse(raw);
+      count = `${Object.values(value).filter(Array.isArray).reduce((sum, list) => sum + list.length, 0)}件の記録候補`;
+    } catch {}
+    card.innerHTML = `<strong>${label}</strong><span>${count}</span><br><code>${key}</code>`;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "このデータをJSONで保存";
+    button.onclick = () => {
+      const blob = new Blob([raw], { type: "application/json" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `simple-step-recovery-${key}.json`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    };
+    card.append(button);
+    results.append(card);
+  }
+  if (!found) results.innerHTML = '<section class="record empty"><strong>保存データを確認できませんでした</strong><p>以前のSafariタブ、JSONバックアップ、iPhoneのバックアップを次に確認します。</p></section>';
+})();
+</script>
+</body>
+</html>
