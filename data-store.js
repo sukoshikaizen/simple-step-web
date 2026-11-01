@@ -2,10 +2,11 @@
   "use strict";
 
   const STORAGE_KEY = "simple-step-v2-db";
-  const SCHEMA_VERSION = 11;
+  const SCHEMA_VERSION = 12;
   const PRIORITIES = ["none", "low", "medium", "high", "urgent"];
   const COLLECTION_TYPES = Object.freeze({
-    categories: "category", projects: "project", themes: "theme", tasks: "task",
+    categories: "category", projects: "project", themes: "theme", themeChecks: "theme_check",
+    monthlyFocuses: "monthly_focus", contextNotes: "context_note", tasks: "task",
     wishLists: "wish_list", journals: "journal", journalCategories: "journal_category",
     recurringRules: "recurring_rule", routines: "routine", routineChecks: "routine_check",
     patrolPlaces: "patrol_place", patrolChecks: "patrol_check", aiChanges: "ai_change",
@@ -46,6 +47,9 @@
       categories: [],
       projects: [],
       themes: [],
+      themeChecks: [],
+      monthlyFocuses: [],
+      contextNotes: [],
       tasks: [],
       wishLists: [],
       journals: [],
@@ -145,7 +149,7 @@
     const source = raw && typeof raw === "object" ? raw : {};
     const db = { ...createEmptyDatabase(), ...source, schemaVersion: SCHEMA_VERSION };
     for (const key of [
-      "categories", "projects", "themes", "tasks", "wishLists", "journals", "journalCategories",
+      "categories", "projects", "themes", "themeChecks", "monthlyFocuses", "contextNotes", "tasks", "wishLists", "journals", "journalCategories",
       "recurringRules", "routines", "routineChecks", "patrolPlaces", "patrolChecks", "aiChanges", "importHistory"
     ]) {
       db[key] = Array.isArray(db[key]) ? db[key] : [];
@@ -154,8 +158,17 @@
     db.wishLists = db.wishLists.map((list, index) => { const createdAt = list.createdAt || now(); return { id: list.id || id(), type: "wish_list", name: String(list.name || "").trim(), displayOrder: Number.isInteger(list.displayOrder) ? list.displayOrder : index + 1, createdAt, updatedAt: list.updatedAt || createdAt, deletedAt: list.deletedAt || null }; }).filter(list => list.name);
     db.journals = db.journals.map(journal => ({ ...journal, journalKind: journal.journalKind === "one_line" ? "one_line" : "standard", journalCategoryId: journal.journalCategoryId || "" }));
     db.journalCategories = db.journalCategories.map(category => { const createdAt = category.createdAt || now(); return { id: category.id || id(), type: "journal_category", name: String(category.name || "").trim(), active: category.active !== false, createdAt, updatedAt: category.updatedAt || createdAt, deletedAt: category.deletedAt || null }; }).filter(category => category.name);
-    db.categories = db.categories.map((category, index) => ({ ...category, displayOrder: Number.isInteger(category.displayOrder) ? category.displayOrder : index + 1 }));
-    db.projects = db.projects.map((project, index) => ({ ...project, categoryId: project.categoryId || "", displayOrder: Number.isInteger(project.displayOrder) ? project.displayOrder : index + 1 }));
+    db.categories = db.categories.map((category, index) => ({ ...category, description: String(category.description || ""), displayOrder: Number.isInteger(category.displayOrder) ? category.displayOrder : index + 1 }));
+    db.projects = db.projects.map((project, index) => ({
+      ...project,
+      categoryId: project.categoryId || "",
+      description: String(project.description || ""),
+      status: ["active", "paused", "done", "cancelled"].includes(project.status) ? project.status : "active",
+      startDate: project.startDate || null,
+      dueDate: project.dueDate || null,
+      completionCondition: String(project.completionCondition || ""),
+      displayOrder: Number.isInteger(project.displayOrder) ? project.displayOrder : index + 1
+    }));
     for (const project of db.projects) {
       if (project.categoryId) continue;
       const categoryIds = [...new Set(db.tasks.filter(task => task.projectId === project.id && task.categoryId).map(task => task.categoryId))];
@@ -171,7 +184,66 @@
       fromValue: change.fromValue ?? change.fromId ?? null,
       toValue: change.toValue ?? change.toId ?? null
     }));
-    db.themes = db.themes.map(theme => ({ ...theme, active: theme.active !== false }));
+    db.themes = db.themes.map(theme => {
+      const createdAt = theme.createdAt || now();
+      return {
+        ...theme,
+        type: "theme",
+        name: String(theme.name || "").trim(),
+        description: String(theme.description || ""),
+        categoryId: theme.categoryId || "",
+        projectId: theme.projectId || "",
+        frequency: ["daily", "weekdays", "weekly", "focus", "manual"].includes(theme.frequency) ? theme.frequency : "daily",
+        daysOfWeek: Array.isArray(theme.daysOfWeek) ? theme.daysOfWeek.map(Number).filter(day => day >= 0 && day <= 6) : [],
+        showDates: Array.isArray(theme.showDates) ? [...new Set(theme.showDates.filter(value => /^\d{4}-\d{2}-\d{2}$/.test(value)))] : [],
+        weeklyTarget: Number.isInteger(theme.weeklyTarget) && theme.weeklyTarget > 0 ? Math.min(7, theme.weeklyTarget) : null,
+        active: theme.active !== false,
+        createdAt,
+        updatedAt: theme.updatedAt || createdAt,
+        endedAt: theme.endedAt || null,
+        deletedAt: theme.deletedAt || null
+      };
+    }).filter(theme => theme.name);
+    db.themeChecks = db.themeChecks.map(check => {
+      const createdAt = check.createdAt || check.checkedAt || now();
+      return {
+        id: check.id || id(), type: "theme_check", themeId: check.themeId || "",
+        businessDate: check.businessDate || dateKey(createdAt), note: String(check.note || ""),
+        minutes: Number.isInteger(check.minutes) && check.minutes > 0 ? check.minutes : null,
+        count: Number.isFinite(check.count) && check.count > 0 ? check.count : null,
+        journalId: check.journalId || "", checkedAt: check.checkedAt || createdAt,
+        createdAt, updatedAt: check.updatedAt || createdAt, deletedAt: check.deletedAt || null
+      };
+    }).filter(check => check.themeId);
+    const knownLegacyJournals = new Set(db.themeChecks.map(check => check.journalId).filter(Boolean));
+    for (const journal of db.journals) {
+      if (!journal.themeId || journal.deletedAt || knownLegacyJournals.has(journal.id)) continue;
+      db.themeChecks.push({
+        id: `journal-${journal.id}`, type: "theme_check", themeId: journal.themeId,
+        businessDate: journal.entryDate || dateKey(journal.createdAt), note: journal.text || "",
+        minutes: null, count: null, journalId: journal.id, checkedAt: journal.createdAt,
+        createdAt: journal.createdAt, updatedAt: journal.updatedAt || journal.createdAt, deletedAt: null
+      });
+    }
+    db.monthlyFocuses = db.monthlyFocuses.map(focus => {
+      const createdAt = focus.createdAt || now();
+      return {
+        id: focus.id || id(), type: "monthly_focus", monthKey: focus.monthKey || monthKey(dateKey()),
+        targetType: ["category", "project", "theme"].includes(focus.targetType) ? focus.targetType : "category",
+        targetId: focus.targetId || "", intention: String(focus.intention || ""),
+        reflection: String(focus.reflection || ""), carryForward: Boolean(focus.carryForward),
+        createdAt, updatedAt: focus.updatedAt || createdAt, deletedAt: focus.deletedAt || null
+      };
+    }).filter(focus => focus.targetId);
+    db.contextNotes = db.contextNotes.map(note => {
+      const createdAt = note.createdAt || now();
+      return {
+        id: note.id || id(), type: "context_note",
+        targetType: note.targetType === "project" ? "project" : "category",
+        targetId: note.targetId || "", text: String(note.text || "").trim(),
+        createdAt, updatedAt: note.updatedAt || createdAt, deletedAt: note.deletedAt || null
+      };
+    }).filter(note => note.targetId && note.text);
     db.settings = { timeZone: "Asia/Tokyo", weekStartsOn: 1, dayRolloverTime: "00:00", backlogView: "newest", wishView: "newest", ...(db.settings || {}) };
     db.settings.weekStartsOn = Math.min(6, Math.max(0, Number(db.settings.weekStartsOn) || 0));
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(db.settings.dayRolloverTime)) db.settings.dayRolloverTime = "00:00";
