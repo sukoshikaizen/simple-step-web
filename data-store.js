@@ -89,6 +89,9 @@
         : null,
       recurrenceRuleId: task.recurrenceRuleId || null,
       occurrenceDate: task.occurrenceDate || null,
+      pendingRecurrence: task.pendingRecurrence && typeof task.pendingRecurrence === "object"
+        ? { ...task.pendingRecurrence }
+        : null,
       createdAt,
       createdDate: task.createdDate || dateKey(createdAt),
       updatedAt: task.updatedAt || createdAt,
