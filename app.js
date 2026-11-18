@@ -252,7 +252,7 @@ $("#projectizeForm").onsubmit=async e=>{
   categoryId=newCategory?ensureName("categories",newCategory):$("#projectizeCategory").value;
   const stamp=now();project={id:uid(),name,description:"",categoryId,status:"active",startDate:null,dueDate:null,completionCondition:"",displayOrder:Math.max(0,...orderedProjects(categoryId).map(item=>item.displayOrder||0))+1,createdAt:stamp,updatedAt:stamp,deletedAt:null};db.projects.push(project)
  }
- items.forEach(item=>Data.updateTask(item,{categoryId,projectId:project.id},"user"));pendingProjectItemIds=[];clearSelectionModes();await persist();$("#projectizeDialog").close();renderAll()
+ items.forEach(item=>Data.updateTask(item,{categoryId,projectId:project.id,todayDate:null},"user"));pendingProjectItemIds=[];clearSelectionModes();await persist();$("#projectizeDialog").close();renderAll()
 };
 $("#wishForm").onsubmit=async e=>{e.preventDefault();const title=$("#wishTitle").value.trim();if(!title)return;await addTask({title,recordKind:"wish",wishListId:$("#wishListForNew").value});e.target.reset();renderAll()};
 $("#wishListForm").onsubmit=async e=>{e.preventDefault();const name=$("#wishListName").value.trim();if(!name||db.wishLists.some(list=>isLive(list)&&list.name.toLowerCase()===name.toLowerCase()))return;const stamp=now();db.wishLists.push({id:uid(),type:"wish_list",name,displayOrder:Math.max(0,...orderedWishLists().map(list=>list.displayOrder||0))+1,createdAt:stamp,updatedAt:stamp,deletedAt:null});e.target.reset();await persist();renderAll()};
