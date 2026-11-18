@@ -44,7 +44,7 @@ function renderSelectionModes(){
   const cards=[...new Map(selectors.flatMap(selector=>$$(selector+" [data-task-id]")).map(card=>[card.dataset.taskId,card])).values()],visibleIds=new Set(cards.map(card=>card.dataset.taskId));
   state.ids=new Set([...state.ids].filter(id=>visibleIds.has(id)));
   const count=state.ids.size,toggle=control.querySelector(".selection-mode-button"),summary=control.querySelector(".selection-mode-summary"),actions=control.querySelector(".selection-mode-actions");
-  control.classList.toggle("active",state.active);toggle.textContent=`選択モード：${state.active?"オン":"オフ"}`;toggle.setAttribute("aria-pressed",String(state.active));summary.textContent=state.active?`${count}件選択中。カードをタップして選べます。`:"複数選んで種類を変更します。";actions.hidden=!state.active;actions.querySelectorAll("button").forEach(button=>button.disabled=!count);
+  section.classList.toggle("selection-mode-active",state.active);control.classList.toggle("active",state.active);toggle.textContent=`選択モード：${state.active?"オン":"オフ"}`;toggle.setAttribute("aria-pressed",String(state.active));summary.textContent=state.active?`${count}件選択中。カードをタップして選べます。`:"複数選んで種類を変更します。";actions.hidden=!state.active;actions.querySelectorAll("button").forEach(button=>button.disabled=!count);
   for(const card of cards){
    card.querySelector(":scope > .selection-check")?.remove();card.classList.toggle("selection-mode-item",state.active);delete card.dataset.selectionPage;
    if(!state.active)continue;
