@@ -2,11 +2,11 @@
   "use strict";
 
   const STORAGE_KEY = "simple-step-v2-db";
-  const SCHEMA_VERSION = 12;
+  const SCHEMA_VERSION = 13;
   const PRIORITIES = ["none", "low", "medium", "high", "urgent"];
   const COLLECTION_TYPES = Object.freeze({
     categories: "category", projects: "project", themes: "theme", themeChecks: "theme_check",
-    monthlyFocuses: "monthly_focus", contextNotes: "context_note", tasks: "task",
+    monthlyFocuses: "monthly_focus", contextNotes: "context_note", tasks: "task", taskDayPlans: "task_day_plan",
     wishLists: "wish_list", journals: "journal", journalCategories: "journal_category",
     recurringRules: "recurring_rule", routines: "routine", routineChecks: "routine_check",
     patrolPlaces: "patrol_place", patrolChecks: "patrol_check", aiChanges: "ai_change",
@@ -51,6 +51,7 @@
       monthlyFocuses: [],
       contextNotes: [],
       tasks: [],
+      taskDayPlans: [],
       wishLists: [],
       journals: [],
       journalCategories: [],
@@ -152,12 +153,30 @@
     const source = raw && typeof raw === "object" ? raw : {};
     const db = { ...createEmptyDatabase(), ...source, schemaVersion: SCHEMA_VERSION };
     for (const key of [
-      "categories", "projects", "themes", "themeChecks", "monthlyFocuses", "contextNotes", "tasks", "wishLists", "journals", "journalCategories",
+      "categories", "projects", "themes", "themeChecks", "monthlyFocuses", "contextNotes", "tasks", "taskDayPlans", "wishLists", "journals", "journalCategories",
       "recurringRules", "routines", "routineChecks", "patrolPlaces", "patrolChecks", "aiChanges", "importHistory"
     ]) {
       db[key] = Array.isArray(db[key]) ? db[key] : [];
     }
     db.tasks = db.tasks.map(normalizeTask);
+    db.taskDayPlans = db.taskDayPlans.map(plan => {
+      const createdAt = plan.createdAt || plan.selectedAt || now();
+      return {
+        id: plan.id || `${plan.taskId}:${plan.businessDate}`,
+        type: "task_day_plan",
+        taskId: plan.taskId || "",
+        businessDate: plan.businessDate || dateKey(createdAt),
+        selectedAt: plan.selectedAt || createdAt,
+        createdAt,
+        updatedAt: plan.updatedAt || createdAt
+      };
+    }).filter(plan => plan.taskId && /^\d{4}-\d{2}-\d{2}$/.test(plan.businessDate));
+    const knownTaskPlans = new Set(db.taskDayPlans.map(plan => `${plan.taskId}:${plan.businessDate}`));
+    for (const task of db.tasks) {
+      if (!task.todayDate || knownTaskPlans.has(`${task.id}:${task.todayDate}`)) continue;
+      const stamp = task.updatedAt || task.createdAt || now();
+      db.taskDayPlans.push({ id: `${task.id}:${task.todayDate}`, type: "task_day_plan", taskId: task.id, businessDate: task.todayDate, selectedAt: stamp, createdAt: stamp, updatedAt: stamp });
+    }
     db.wishLists = db.wishLists.map((list, index) => { const createdAt = list.createdAt || now(); return { id: list.id || id(), type: "wish_list", name: String(list.name || "").trim(), displayOrder: Number.isInteger(list.displayOrder) ? list.displayOrder : index + 1, createdAt, updatedAt: list.updatedAt || createdAt, deletedAt: list.deletedAt || null }; }).filter(list => list.name);
     db.journals = db.journals.map(journal => ({ ...journal, journalKind: journal.journalKind === "one_line" ? "one_line" : "standard", journalCategoryId: journal.journalCategoryId || "" }));
     db.journalCategories = db.journalCategories.map(category => { const createdAt = category.createdAt || now(); return { id: category.id || id(), type: "journal_category", name: String(category.name || "").trim(), active: category.active !== false, createdAt, updatedAt: category.updatedAt || createdAt, deletedAt: category.deletedAt || null }; }).filter(category => category.name);
